@@ -18,9 +18,13 @@ class DynamoInferenceBasicTest(unittest.TestCase):
     b = torch.sin(y)
     return a + b
 
-  @torch.compile(backend='torchxla_trace_once')
+  @dynamo.optimize('torchxla_trace_once')
   def fn_simple_dynamo(self, x, y):
     return self.fn_simple(x, y)
+
+  @dynamo.optimize('torchxla_trace_once')
+  def run_model_with_dynamo(self, model, data):
+    return model(data)
 
   def test_simple_model(self):
     device = xm.xla_device()
@@ -61,11 +65,8 @@ class DynamoInferenceBasicTest(unittest.TestCase):
     xm.wait_device_ops()
     met.clear_all()
     for data, _ in loader:
-      dynamo_resnet18 = torch.compile(
-          xla_resnet18, backend='torchxla_trace_once')
-      output = dynamo_resnet18(data)
-      output_cpu = resnet18(data.cpu())
-      assert torch.allclose(output_cpu, output.cpu(), rtol=1e-05, atol=1e-05)
+      output = self.run_model_with_dynamo(xla_resnet18, data)
+      torch.allclose(resnet18(data.cpu()), output.cpu())
     # We only expect one graph for the resnet18 inference.
     self.assertEqual(met.metric_data('CompileTime')[0], 1)
     self.assertEqual(met.metric_data('ExecuteTime')[0], sample_count)
@@ -84,7 +85,7 @@ class DynamoTrainingBasicTest(unittest.TestCase):
     loss.backward()
     return loss
 
-  @torch.compile(backend='aot_torchxla_trace_once')
+  @dynamo.optimize('aot_torchxla_trace_once')
   def fn_simple_dynamo(self, input):
     return self.fn_simple(input)
 
@@ -94,6 +95,10 @@ class DynamoTrainingBasicTest(unittest.TestCase):
     loss = loss_fn(pred, target)
     loss.backward()
     return pred
+
+  @dynamo.optimize('aot_torchxla_trace_once')
+  def run_model_with_dynamo(self, model, data, target):
+    return self.train_model(model, data, target)
 
   def test_simple_model(self):
     torch._dynamo.reset()
@@ -142,11 +147,8 @@ class DynamoTrainingBasicTest(unittest.TestCase):
     xm.mark_step()
     xm.wait_device_ops()
     met.clear_all()
-
-    dynamo_train_model = torch.compile(
-        self.train_model, backend='aot_torchxla_trace_once')
     for data, target in loader:
-      xla_output = dynamo_train_model(xla_resnet18, data, target)
+      xla_output = self.run_model_with_dynamo(xla_resnet18, data, target)
       cpu_data = data.detach().cpu()
       cpu_data.requires_grad = True
       cpu_target = target.detach().cpu()
