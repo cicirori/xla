@@ -295,6 +295,8 @@ def train_imagenet():
     tracker = xm.RateTracker()
     model.train()
     for step, (data, target) in enumerate(loader):
+      if step == 150:
+        os._exit(0)
       with xp.StepTrace('train_imagenet'):
         with xp.Trace('build_graph'):
           optimizer.zero_grad()

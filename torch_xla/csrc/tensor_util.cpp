@@ -2,6 +2,7 @@
 
 #include <ATen/Formatting.h>
 #include <ATen/Functions.h>
+#include <ATen/DLConvertor.h>
 
 #include <algorithm>
 #include <cstring>
@@ -861,6 +862,14 @@ bool TensorCompare(const at::Tensor& t1, const at::Tensor& t2) {
 
 torch::lazy::BackendDataPtr TensorToXlaData(
     const at::Tensor& tensor, const torch::lazy::BackendDevice& device) {
+  if (false && tensor.is_cuda()) {
+    DLManagedTensor* dlmt = toDLPack(tensor);
+    // std::function<void()> on_delete_callback;
+    // auto xla_data = xla::ComputationClient::Get()->GetUninitializedData(
+    //     GetDevice().toString(), shape());
+    auto data = xla::ComputationClient::Get()->CreateViewOfDeviceBuffer(dlmt);
+    return WrapXlaData(data);
+  }
   return TensorToXlaData(
       tensor, CreateComputationShapeFromTensor(tensor, &device), device);
 }

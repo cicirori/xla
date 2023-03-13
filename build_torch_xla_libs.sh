@@ -94,6 +94,8 @@ else
   TF_EXTRA_FLAGS="--copt=-Wno-unknown-warning-option"
   bazel build $MAX_JOBS $VERBOSE $TPUVM_FLAG $TF_EXTRA_FLAGS --spawn_strategy=$BUILD_STRATEGY --show_progress_rate_limit=20 \
     --define framework_shared_object=false -c "$MODE" "${OPTS[@]}" \
+    --per_file_copt="//tensorflow/tsl/framework/*\.*@-O0,-g" \
+    --per_file_copt="//tensorflow/compiler/xla/pjrt/*\.*@-O0,-g" \
     $XLA_CUDA_CFG //tensorflow/compiler/xla/xla_client:libxla_computation_client.so
 
   popd

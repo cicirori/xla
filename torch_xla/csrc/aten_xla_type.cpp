@@ -7,7 +7,12 @@
 #include <ATen/native/CPUFallback.h>
 #include <ATen/native/TypeProperties.h>
 
+#include <gperftools/profiler.h>
+
+
 #include <mutex>
+#include <string>
+#include <random>
 
 #include "tensorflow/compiler/xla/xla_client/debug_macros.h"
 #include "tensorflow/compiler/xla/xla_client/metrics.h"
@@ -49,6 +54,29 @@
 
 namespace torch_xla {
 namespace {
+
+
+std::string strRand(int length) {			// length: 产生字符串的长度
+    char tmp;							// tmp: 暂存一个随机数
+    std::string buffer;						// buffer: 保存返回值
+    
+    // 下面这两行比较重要:
+     std::random_device rd;					// 产生一个 std::random_device 对象 rd
+    std::default_random_engine random(rd());	// 用 rd 初始化一个随机数发生器 random
+    
+    for (int i = 0; i < length; i++) {
+        tmp = random() % 36;	// 随机一个小于 36 的整数，0-9、A-Z 共 36 种字符
+        if (tmp < 10) {			// 如果随机数小于 10，变换成一个阿拉伯数字的 ASCII
+            tmp += '0';
+        } else {				// 否则，变换成一个大写字母的 ASCII
+            tmp -= 10;
+            tmp += 'A';
+        }
+        buffer += tmp;
+    }
+    return buffer;
+}
+
 
 at::Tensor to_meta(const at::Tensor& tensor) {
   // undefined tensors can't be converted to the meta device, since they don't
@@ -455,6 +483,60 @@ at::Tensor& XLANativeFunctions::_amp_update_scale_(at::Tensor& current_scale,
   return current_scale;
 }
 
+at::Tensor XLANativeFunctions::_to_copy(
+    const at::Tensor& self,
+    c10::optional<at::ScalarType> dtype,
+    c10::optional<at::Layout> layout,
+    c10::optional<at::Device> device,
+    c10::optional<bool> pin_memory,
+    bool non_blocking,
+    c10::optional<at::MemoryFormat> memory_format) {
+  TORCH_LAZY_FN_COUNTER("xla::");
+  // nvtxRangePush(__FUNCTION__);
+  // ProfilerStart(strRand(16).c_str()); 
+  // auto dst_tensor = bridge::TryGetXlaTensor(dst);
+  auto self_tensor = bridge::TryGetXlaTensor(self);
+  if (!self_tensor && device && device->type() == c10::kXLA) {
+    auto dst = empty_symint(self.sym_sizes(), dtype, layout, device, pin_memory, c10::nullopt);
+    auto dst_tensor = bridge::TryGetXlaTensor(dst);
+    XLA_CHECK(dst_tensor);
+    if (self.is_cuda()) {
+      dst_tensor->UpdateFromCudaTensor(self);
+    } else {
+      static bool sync_update =
+          xla::sys_util::GetEnvBool("XLA_TENSOR_UPDATE_SYNC", true);
+      dst_tensor->UpdateFromTensor(self, /*sync=*/sync_update);
+    }
+    // ProfilerStop();
+    return dst;
+  } else if (device && device->type() != c10::kXLA) {
+    if (device->type() == c10::kCUDA) {
+      // XLA_CHECK(self.scalar_type() == dst.scalar_type());
+      // dst.resize_(self.sizes());
+      // self_tensor->ToCudaTensor(dst);
+      at::Tensor dst = self_tensor->ToCudaTensor();
+      // ProfilerStop();
+      return dst;
+      // dst.copy_(tensor);
+    } else {
+      at::Tensor tensor = self_tensor->ToTensor(/*detached=*/true);
+      at::Tensor typed_tensor =
+          torch::lazy::CopyTensor(tensor, *dtype, /*copy=*/false);
+      // ProfilerStop();
+      return typed_tensor;
+      // dst.resize_as_(typed_tensor).copy_(typed_tensor);
+    }
+  } else {
+    auto dst = empty_symint(self.sym_sizes(), dtype, layout, device, pin_memory, c10::nullopt);
+    auto dst_tensor = bridge::TryGetXlaTensor(dst);
+    tensor_methods::copy_(dst_tensor, self_tensor);
+    bridge::ReplaceXlaTensor(dst, dst_tensor);
+    // ProfilerStop();
+    return dst;
+  }
+  return {};
+}
+
 at::Tensor XLANativeFunctions::_copy_from(const at::Tensor& self,
                                           const at::Tensor& dst,
                                           bool non_blocking) {
@@ -462,16 +544,27 @@ at::Tensor XLANativeFunctions::_copy_from(const at::Tensor& self,
   auto dst_tensor = bridge::TryGetXlaTensor(dst);
   auto self_tensor = bridge::TryGetXlaTensor(self);
   if (!self_tensor) {
-    static bool sync_update =
-        xla::sys_util::GetEnvBool("XLA_TENSOR_UPDATE_SYNC", true) &&
-        !xla::sys_util::GetEnvBool("XLA_USE_SPMD", false);
     XLA_CHECK(dst_tensor);
-    dst_tensor->UpdateFromTensor(self, /*sync=*/sync_update);
+    if (self.is_cuda()) {
+      dst_tensor->UpdateFromCudaTensor(self);
+    } else {
+      static bool sync_update =
+          xla::sys_util::GetEnvBool("XLA_TENSOR_UPDATE_SYNC", true);
+      dst_tensor->UpdateFromTensor(self, /*sync=*/sync_update);
+    }
   } else if (!dst_tensor) {
-    at::Tensor tensor = self_tensor->ToTensor(/*detached=*/true);
-    at::Tensor typed_tensor =
-        torch::lazy::CopyTensor(tensor, dst.scalar_type(), /*copy=*/false);
-    dst.resize_as_(typed_tensor).copy_(typed_tensor);
+    if (dst.is_cuda()) {
+      XLA_CHECK(self.scalar_type() == dst.scalar_type());
+      // dst.resize_(self.sizes());
+      // self_tensor->ToCudaTensor(dst);
+      at::Tensor tensor = self_tensor->ToCudaTensor();
+      dst.copy_(tensor);
+    } else {
+      at::Tensor tensor = self_tensor->ToTensor(/*detached=*/true);
+      at::Tensor typed_tensor =
+          torch::lazy::CopyTensor(tensor, dst.scalar_type(), /*copy=*/false);
+      dst.resize_as_(typed_tensor).copy_(typed_tensor);
+    }
   } else {
     tensor_methods::copy_(dst_tensor, self_tensor);
     bridge::ReplaceXlaTensor(dst, dst_tensor);

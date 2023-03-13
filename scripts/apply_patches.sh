@@ -2,7 +2,7 @@
 
 set -ex
 
-CDIR="$(cd "$(dirname "$0")" ; pwd -P)"
+CDIR="$(cd "$(dirname "$0")" ; pwd)"
 XDIR=$CDIR/..
 PTDIR=$XDIR/..
 TFDIR=$XDIR/third_party/tensorflow

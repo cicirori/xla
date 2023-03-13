@@ -63,6 +63,8 @@ class MNIST(nn.Module):
     x = torch.flatten(x, 1)
     x = F.relu(self.fc1(x))
     x = self.fc2(x)
+    # print(x.shape)
+    # print(x.stride())
     return F.log_softmax(x, dim=1)
 
 
@@ -161,11 +163,12 @@ def train_mnist(flags, **kwargs):
     total_samples = 0
     correct = 0
     model.eval()
-    for data, target in loader:
-      output = model(data)
-      pred = output.max(1, keepdim=True)[1]
-      correct += pred.eq(target.view_as(pred)).sum()
-      total_samples += data.size()[0]
+    with torch.no_grad():
+      for data, target in loader:
+        output = model(data)
+        pred = output.max(1, keepdim=True)[1]
+        correct += pred.eq(target.view_as(pred)).sum()
+        total_samples += data.size()[0]
 
     accuracy = 100.0 * correct.item() / total_samples
     accuracy = xm.mesh_reduce('test_accuracy', accuracy, np.mean)
@@ -173,6 +176,7 @@ def train_mnist(flags, **kwargs):
 
   train_device_loader = pl.MpDeviceLoader(train_loader, device)
   test_device_loader = pl.MpDeviceLoader(test_loader, device)
+  # test_device_loader = test_loader
   accuracy, max_accuracy = 0.0, 0.0
   for epoch in range(1, flags.num_epochs + 1):
     xm.master_print('Epoch {} train begin {}'.format(epoch, test_utils.now()))

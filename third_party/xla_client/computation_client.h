@@ -11,6 +11,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/types/optional.h"
 #include "absl/types/span.h"
+#include "include/dlpack/dlpack.h"  // from @dlpack
 #include "tensorflow/compiler/xla/client/xla_computation.h"
 #include "tensorflow/compiler/xla/literal_util.h"
 #include "tensorflow/compiler/xla/types.h"
@@ -203,6 +204,17 @@ class ComputationClient {
   // Lock the DataPtr
   virtual std::vector<xla::util::ExceptionCleanup> LockAsyncDatas(
       absl::Span<const DataPtr> datas) = 0;
+
+  virtual DataPtr GetUninitializedData(const std::string& device,
+                                       Shape shape) = 0;
+
+  virtual DataPtr CreateViewOfDeviceBuffer(
+      void* device_ptr, const Shape& shape, const std::string& device,
+      std::function<void()> on_delete_callback) = 0;
+
+  virtual DataPtr CreateViewOfDeviceBuffer(DLManagedTensor* dlmt) = 0;
+
+  virtual DLManagedTensor* GetDLManagedTensor(DataPtr data) = 0;
 
   // Returns data shards. We expect this to be called on PjRtShardedData to
   // retrieve the shards. If other data type is passed, it returns the input

@@ -61,6 +61,7 @@ tf_cc_shared_object(
         "//tensorflow/core/platform/cloud:gcs_file_system",
         "//tensorflow/python/profiler/internal:profiler_pywrap_impl",
         "@com_google_absl//absl/strings",
+        "@dlpack",
     ],
 )
 
@@ -160,6 +161,8 @@ cc_library(
         "//tensorflow/compiler/xrt:xrt_proto_cc",
         "//tensorflow/compiler/xrt:xrt_server",
         "//tensorflow/compiler/xrt:xrt_utils",
+        "//tensorflow/compiler/xla:util",
+        "//tensorflow/compiler/xla:types",
         "//tensorflow/compiler/xrt/cc:xrt_ops",
         "//tensorflow/core:core_cpu",
         "//tensorflow/core:framework_internal",
@@ -172,8 +175,11 @@ cc_library(
         "//tensorflow/core/profiler/rpc/client:profiler_client",
         "//tensorflow/core/protobuf/tpu:topology_proto_cc",
         "//tensorflow/compiler/xla/stream_executor:stream_executor_impl",
+        "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/numeric:int128",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+        "@dlpack",
     ] + if_cuda_is_configured([
         "@local_config_nccl//:nccl",
         "//tensorflow/compiler/jit:xla_gpu_device",

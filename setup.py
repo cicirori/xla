@@ -38,7 +38,7 @@
 from __future__ import print_function
 
 from setuptools import setup, find_packages, distutils
-from torch.utils.cpp_extension import BuildExtension, CppExtension
+from torch.utils.cpp_extension import BuildExtension, CppExtension, CUDA_HOME
 import contextlib
 import distutils.ccompiler
 import distutils.command.clean
@@ -316,16 +316,19 @@ for ipath in [
     'tensorflow/bazel-tensorflow/external/com_google_absl',
     'tensorflow/bazel-tensorflow/external/com_googlesource_code_re2',
     'tensorflow/bazel-tensorflow/external/com_github_grpc_grpc/include',
+    'tensorflow/bazel-tensorflow/external/dlpack',
 ]:
   include_dirs.append(os.path.join(third_party_path, ipath))
 include_dirs += [
     pytorch_source_path,
     os.path.join(pytorch_source_path, 'torch/csrc'),
     os.path.join(pytorch_source_path, 'torch/lib/tmp_install/include'),
+    os.path.join(CUDA_HOME, 'include'),
 ]
 
 library_dirs = []
 library_dirs.append(lib_path)
+library_dirs.append(os.path.join(CUDA_HOME, "lib64"))
 
 extra_link_args = []
 
@@ -361,6 +364,7 @@ else:
   extra_compile_args += ['-DNDEBUG']
 
 extra_link_args += ['-lxla_computation_client']
+extra_link_args += ['-lprofiler']
 
 setup(
     name=os.environ.get('TORCH_XLA_PACKAGE_NAME', 'torch_xla'),

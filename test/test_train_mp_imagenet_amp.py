@@ -239,6 +239,7 @@ def train_imagenet():
       else:
         output = model(data)
         loss = loss_fn(output, target)
+        xm.mark_step()
         loss.backward()
         xm.optimizer_step(optimizer)
 
@@ -271,7 +272,8 @@ def train_imagenet():
     xm.master_print('Epoch {} train begin {}'.format(epoch, test_utils.now()))
     train_loop_fn(train_device_loader, epoch)
     xm.master_print('Epoch {} train end {}'.format(epoch, test_utils.now()))
-    if not FLAGS.test_only_at_end or epoch == FLAGS.num_epochs:
+    # if not FLAGS.test_only_at_end or epoch == FLAGS.num_epochs:
+    if False:
       accuracy = test_loop_fn(test_device_loader, epoch)
       xm.master_print('Epoch {} test end {}, Accuracy={:.2f}'.format(
           epoch, test_utils.now(), accuracy))

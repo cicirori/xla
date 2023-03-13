@@ -1,5 +1,7 @@
 #include "torch_xla/csrc/aten_xla_bridge.h"
 
+#include <ATen/DLConvertor.h>
+
 #include <map>
 #include <string>
 #include <vector>
@@ -10,6 +12,7 @@
 #include "torch_xla/csrc/device.h"
 #include "torch_xla/csrc/tensor_impl.h"
 #include "torch_xla/csrc/torch_util.h"
+#include "torch_xla/csrc/tensor_util.h"
 #include "torch_xla/csrc/xla_graph_executor.h"
 
 namespace torch_xla {
@@ -70,10 +73,19 @@ bool IsXlaTensor(const at::Tensor& tensor) {
 }
 
 XLATensorPtr GetXlaTensor(const at::Tensor& tensor) {
-  auto xtensor = TryGetXlaTensor(tensor);
-  XLA_CHECK(xtensor) << "Input tensor is not an XLA tensor: "
-                     << tensor.toString();
-  return xtensor;
+  if (false && tensor.is_cuda()) {
+    DLManagedTensor* dlmt = toDLPack(tensor);
+    // std::function<void()> on_delete_callback;
+    // auto xla_data = xla::ComputationClient::Get()->GetUninitializedData(
+    //     GetDevice().toString(), shape());
+    auto data = xla::ComputationClient::Get()->CreateViewOfDeviceBuffer(dlmt);
+    return XLATensor::Create(WrapXlaData(data));
+  } else {
+    auto xtensor = TryGetXlaTensor(tensor);
+    XLA_CHECK(xtensor) << "Input tensor is not an XLA tensor: "
+                        << tensor.toString();
+    return xtensor;
+  }
 }
 
 void ReplaceXlaTensor(const at::Tensor& tensor, XLATensorPtr new_xla_tensor) {

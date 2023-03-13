@@ -1,5 +1,14 @@
 #include "torch_xla/csrc/tensor.h"
 
+#include <ATen/ATen.h>
+#include <ATen/Tensor.h>
+#include <ATen/cuda/CUDAEvent.h>
+#include <ATen/DLConvertor.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+#include <gperftools/profiler.h>
+
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -483,6 +492,46 @@ at::Tensor XLATensor::ToTensor(bool detached) {
   return tensor;
 }
 
+void XLATensor::ToCudaTensor(at::Tensor tensor) {
+  // XLA_CHECK(tensor.is_cuda());
+  // XLAGraphExecutor::Get()->SyncLiveTensorsGraph(&GetDevice(), /*devices=*/{},
+  //                                 /*wait=*/true);
+  // XLA_CHECK(data()->xla_data);
+  // auto xla_data = data()->xla_data;
+  // // TODO(lyh271596): Temporarily relies on synchronization behavior between the
+  // // cuda default stream and other streams to ensure correctness, and needs to
+  // // add explicitly control dependency support for the case when PyTorch does
+  // // not use the default stream.
+
+  // XLA_CHECK(at::cuda::getCurrentCUDAStream() ==
+  //           at::cuda::getDefaultCUDAStream());
+  // cudaMemcpyAsync(tensor.data_ptr(),
+  //                 reinterpret_cast<void*>(GetOpaqueHandle()),
+  //                 tensor.nbytes(), cudaMemcpyDeviceToDevice,
+  //                 at::cuda::getCurrentCUDAStream());
+}
+
+at::Tensor XLATensor::ToCudaTensor() {
+  XLAGraphExecutor::Get()->SyncLiveTensorsGraph(&GetDevice(), /*devices=*/{},
+                                  /*wait=*/true);
+  DLManagedTensor* dlmt = xla::ComputationClient::Get()->GetDLManagedTensor(UnwrapXlaData(data()->handle));
+  // XLA_CHECK(data()->xla_data);
+  // auto xla_data = data()->xla_data;
+  // TODO(lyh271596): Temporarily relies on synchronization behavior between the
+  // cuda default stream and other streams to ensure correctness, and needs to
+  // add explicitly control dependency support for the case when PyTorch does
+  // not use the default stream.
+
+  return at::fromDLPack(dlmt);
+
+  // XLA_CHECK(at::cuda::getCurrentCUDAStream() ==
+  //           at::cuda::getDefaultCUDAStream());
+  // cudaMemcpyAsync(tensor.data_ptr(),
+  //                 reinterpret_cast<void*>(GetOpaqueHandle()),
+  //                 tensor.nbytes(), cudaMemcpyDeviceToDevice,
+  //                 at::cuda::getCurrentCUDAStream());
+}
+
 void XLATensor::ShallowCopyTo(XLATensorPtr dest) const {
   dest->SetScalarType(data()->logical_element_type);
   dest->SetIrValue(GetIrValue(), /*inplace=*/false);
@@ -540,6 +589,29 @@ void XLATensor::UpdateFromTensorOut(const XLATensorPtr& tensor) {
     data()->view = nullptr;
   }
   SetIrValue(tensor->GetIrValue(), /*inplace=*/true);
+}
+
+void XLATensor::UpdateFromCudaTensor(at::Tensor tensor) {
+  XLA_CHECK(tensor.is_cuda());
+  torch::lazy::BackendDataPtr data;
+  DLManagedTensor* dlmt = toDLPack(tensor);
+  // std::function<void()> on_delete_callback;
+  // auto xla_data = xla::ComputationClient::Get()->GetUninitializedData(
+  //     GetDevice().toString(), shape());
+  auto xla_data = xla::ComputationClient::Get()->CreateViewOfDeviceBuffer(dlmt);
+  // auto xla_data = xla::ComputationClient::Get()->CreateViewOfDeviceBuffer(
+  //     tensor.data_ptr() , shape(), GetDevice().toString(), on_delete_callback);
+  // TODO(lyh271596): Temporarily relies on synchronization behavior between the
+  // cuda default stream and other streams to ensure correctness, and needs to
+  // add explicitly control dependency support for the case when PyTorch does
+  // not use the default stream.
+  
+  // XLA_CHECK(at::cuda::getCurrentCUDAStream() ==
+  //           at::cuda::getDefaultCUDAStream());
+  // cudaMemcpyAsync(reinterpret_cast<void*>(xla_data->GetOpaqueHandle()),
+  //                 tensor.data_ptr(), tensor.nbytes(), cudaMemcpyDeviceToDevice,
+  //                 at::cuda::getCurrentCUDAStream());
+  SetIrValue(CreateTensorNode(WrapXlaData(xla_data), false));
 }
 
 std::vector<XLATensorPtr> XLATensor::MakeOutputTensors(

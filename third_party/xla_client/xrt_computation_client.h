@@ -242,6 +242,26 @@ class XrtComputationClient : public ComputationClient {
 
   DataPtr CreateDataPlaceholder(std::string device, Shape shape) override;
 
+  ComputationClient::DataPtr GetUninitializedData(const std::string& device,
+                                                  Shape shape) override {
+    XLA_ERROR() << __FUNCTION__ << " not implemented";
+  }
+
+  ComputationClient::DataPtr CreateViewOfDeviceBuffer(
+      void* device_ptr, const Shape& shape, const std::string& device,
+      std::function<void()> on_delete_callback) override {
+    XLA_ERROR() << __FUNCTION__ << " not implemented";
+  }
+
+  ComputationClient::DataPtr CreateViewOfDeviceBuffer(
+      DLManagedTensor* dlmt) override {
+    XLA_ERROR() << __FUNCTION__ << " not implemented";
+  }
+
+  DLManagedTensor* GetDLManagedTensor(ComputationClient::DataPtr data) override {
+    XLA_ERROR() << __FUNCTION__ << " not implemented";
+  }
+
   std::vector<DataPtr> CreateAsyncDatas(
       absl::Span<const TensorSource> tensors) override;
 

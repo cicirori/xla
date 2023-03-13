@@ -150,6 +150,8 @@ class XLATensor : public torch::lazy::LazyTensor {
 
   // Override to use XLAGraphExecutor.
   at::Tensor ToTensor(bool detached) final;
+  void ToCudaTensor(at::Tensor tensor);
+  at::Tensor ToCudaTensor();
 
   // We don't use the upsteram ShallowCopyTo because of logical_element_type.
   void ShallowCopyTo(XLATensorPtr dest) const;
@@ -162,6 +164,7 @@ class XLATensor : public torch::lazy::LazyTensor {
   void UpdateFromTensor(at::Tensor tensor, bool sync);
   void UpdateFromTensorOut(at::Tensor tensor);
   void UpdateFromTensorOut(const XLATensorPtr& tensor);
+  void UpdateFromCudaTensor(at::Tensor tensor);
 
   // Override to use logical_element_type.
   at::ScalarType dtype() const final;

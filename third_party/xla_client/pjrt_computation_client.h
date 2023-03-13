@@ -6,6 +6,7 @@
 #include <shared_mutex>
 
 #include "absl/types/span.h"
+#include "include/dlpack/dlpack.h"  // from @dlpack
 #include "tensorflow/compiler/xla/client/xla_computation.h"
 #include "tensorflow/compiler/xla/literal.h"
 #include "tensorflow/compiler/xla/pjrt/pjrt_client.h"
@@ -22,6 +23,16 @@ class PjRtComputationClient : public ComputationClient {
   PjRtComputationClient();
 
   DataPtr CreateDataPlaceholder(std::string device, Shape shape) override;
+
+  DataPtr GetUninitializedData(const std::string& device, Shape shape) override;
+
+  DataPtr CreateViewOfDeviceBuffer(
+      void* device_ptr, const Shape& shape, const std::string& device,
+      std::function<void()> on_delete_callback) override;
+
+  DataPtr CreateViewOfDeviceBuffer(DLManagedTensor* dlmt) override;
+
+  DLManagedTensor* GetDLManagedTensor(DataPtr data) override;
 
   std::vector<DataPtr> GetDataShards(DataPtr data) override;
 
@@ -143,6 +154,9 @@ class PjRtComputationClient : public ComputationClient {
       const std::string& device);
   std::unique_lock<std::shared_mutex> lock_device(const std::string& device);
 
+  DataPtr DLManagedTensorToBuffer(
+    DLManagedTensor* dlmt, std::shared_ptr<PjRtClient> gpu_client);
+
   struct PjRtData : public Data {
     PjRtData(std::string device, Shape device_shape)
         : Data(std::move(device), std::move(device_shape)) {}
@@ -151,9 +165,15 @@ class PjRtComputationClient : public ComputationClient {
              std::shared_ptr<PjRtBuffer> buffer)
         : Data(std::move(device), std::move(device_shape)), buffer(buffer) {}
 
+    void* get_handle() const {
+      return buffer->AcquireExternalReference()
+          .value()
+          ->OpaqueDeviceMemoryDataPointer();
+    };
+
     OpaqueHandle GetOpaqueHandle() override {
       XLA_CHECK(HasValue());
-      return reinterpret_cast<std::uintptr_t>(buffer.get());
+      return reinterpret_cast<std::uintptr_t>(get_handle());
     };
     void Assign(const Data& data) override;
     bool HasValue() const override {
