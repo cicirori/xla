@@ -365,6 +365,7 @@ else:
 
 extra_link_args += ['-lxla_computation_client']
 extra_link_args += ['-lprofiler']
+extra_link_args += ['-lboost_timer']
 
 setup(
     name=os.environ.get('TORCH_XLA_PACKAGE_NAME', 'torch_xla'),

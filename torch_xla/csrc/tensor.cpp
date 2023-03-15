@@ -9,6 +9,7 @@
 
 #include <gperftools/profiler.h>
 
+#include <chrono>
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -512,8 +513,10 @@ void XLATensor::ToCudaTensor(at::Tensor tensor) {
 }
 
 at::Tensor XLATensor::ToCudaTensor() {
+  auto t1 = std::chrono::steady_clock::now();
   XLAGraphExecutor::Get()->SyncLiveTensorsGraph(&GetDevice(), /*devices=*/{},
                                   /*wait=*/true);
+  auto t2 = std::chrono::steady_clock::now();
   DLManagedTensor* dlmt = xla::ComputationClient::Get()->GetDLManagedTensor(UnwrapXlaData(data()->handle));
   // XLA_CHECK(data()->xla_data);
   // auto xla_data = data()->xla_data;
@@ -521,6 +524,10 @@ at::Tensor XLATensor::ToCudaTensor() {
   // cuda default stream and other streams to ensure correctness, and needs to
   // add explicitly control dependency support for the case when PyTorch does
   // not use the default stream.
+  auto t3 = std::chrono::steady_clock::now();
+  auto d1 =  std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
+  auto d2 =  std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2);
+  TF_VLOG(1) << "timing for to cuda tensor " << d1.count() << " " << d2.count();
 
   return at::fromDLPack(dlmt);
 

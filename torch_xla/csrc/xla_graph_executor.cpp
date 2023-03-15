@@ -12,6 +12,7 @@
 #include <set>
 #include <stdexcept>
 #include <unordered_set>
+#include <boost/timer/timer.hpp>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/memory/memory.h"
@@ -929,6 +930,7 @@ XLAGraphExecutor::ScheduleSyncTensorsGraph(
                    << " on devices: " << absl::StrJoin(devices, ",")
                    << " done!";
       } else {
+          auto t1 = std::chrono::steady_clock::now();
         TF_VLOG(3) << "Executing IR graph hash "
                    << torch::lazy::HashToString(hash) << " on device "
                    << async->device << " ...";
@@ -938,6 +940,11 @@ XLAGraphExecutor::ScheduleSyncTensorsGraph(
         TF_VLOG(3) << "Executing IR graph hash "
                    << torch::lazy::HashToString(hash) << " on device "
                    << async->device << " done!";
+          auto t2 = std::chrono::steady_clock::now();
+            auto d1 =  std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
+        // TF_VLOG(1) << "timing for to cuda tensor " << d1.count() ;
+
+
       }
       for (size_t i = 0; i < results.size(); ++i) {
         if (async->tensors_data[i] != nullptr) {
@@ -973,6 +980,7 @@ XLAGraphExecutor::ScheduleSyncTensorsGraph(
     std::vector<torch::lazy::BackendDataPtr> parameters_data,
     std::string device, ComputationCache::TypePtr cached_computation,
     const std::vector<torch::lazy::BackendDataPtr>& tensor_data_vec) {
+  // boost::timer::auto_cpu_timer t;
   auto tensors_data =
       SetTensorData(tensors, coll->config, coll->indices, tensor_data_vec);
   return ScheduleSyncTensorsGraph(coll, std::move(parameters_data),

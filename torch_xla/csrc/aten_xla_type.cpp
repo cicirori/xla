@@ -493,7 +493,7 @@ at::Tensor XLANativeFunctions::_to_copy(
     c10::optional<at::MemoryFormat> memory_format) {
   TORCH_LAZY_FN_COUNTER("xla::");
   // nvtxRangePush(__FUNCTION__);
-  // ProfilerStart(strRand(16).c_str()); 
+  // ProfilerStart("./"strRand(16).c_str()); 
   // auto dst_tensor = bridge::TryGetXlaTensor(dst);
   auto self_tensor = bridge::TryGetXlaTensor(self);
   if (!self_tensor && device && device->type() == c10::kXLA) {
@@ -511,6 +511,7 @@ at::Tensor XLANativeFunctions::_to_copy(
     return dst;
   } else if (device && device->type() != c10::kXLA) {
     if (device->type() == c10::kCUDA) {
+      // ProfilerStart(strRand(16).c_str()); 
       // XLA_CHECK(self.scalar_type() == dst.scalar_type());
       // dst.resize_(self.sizes());
       // self_tensor->ToCudaTensor(dst);

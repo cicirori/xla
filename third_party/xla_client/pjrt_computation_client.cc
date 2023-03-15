@@ -740,7 +740,7 @@ PjRtComputationClient::ExecuteComputation(
   TF_VLOG(1) << "Executing PjRt computation on " << device;
   const PjRtComputation& pjrt_computation =
       dynamic_cast<const PjRtComputation&>(computation);
-
+  auto t1 = std::chrono::steady_clock::now();
   xla::PjRtDevice* pjrt_device = StringToPjRtDevice(device);
   XLA_CHECK(pjrt_device->IsAddressable()) << pjrt_device->DebugString();
 
@@ -754,6 +754,7 @@ PjRtComputationClient::ExecuteComputation(
         << pjrt_data->buffer->device()->DebugString();
     buffers.push_back(pjrt_data->buffer.get());
   }
+  auto t2 = std::chrono::steady_clock::now();
 
   xla::ExecuteOptions execute_options;
   execute_options.untuple_result = options.explode_tuple;
@@ -762,13 +763,12 @@ PjRtComputationClient::ExecuteComputation(
   std::optional<PjRtFuture<Status>> returned_future;
   std::vector<std::unique_ptr<xla::PjRtBuffer>> results =
       pjrt_computation.executable
-          ->ExecuteSharded(buffers, pjrt_device, execute_options,
-                           returned_future)
+          ->ExecuteSharded(buffers, pjrt_device, execute_options, returned_future, true)
           .value();
-
-  // Signal that `ExecuteSharded` has completed for the ExecuteTime metric.
-  // Copies the `timed` shared pointer into the lambda.
-  returned_future->OnReady([timed](Status unused) mutable { timed.reset(); });
+  auto t3 = std::chrono::steady_clock::now();
+  // // Signal that `ExecuteSharded` has completed for the ExecuteTime metric.
+  // // Copies the `timed` shared pointer into the lambda.
+  // returned_future->OnReady([timed](Status unused) mutable { timed.reset(); });
 
   std::vector<DataPtr> datas;
   datas.reserve(results.size());
@@ -780,6 +780,13 @@ PjRtComputationClient::ExecuteComputation(
 
     datas.push_back(data);
   }
+  auto t4 = std::chrono::steady_clock::now();
+  auto d1 =  std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
+  auto d2 =  std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2);
+  auto d3 =  std::chrono::duration_cast<std::chrono::microseconds>(t4 - t3);
+  TF_VLOG(1) << "timing for to cuda tensor " << d1.count() <<  " " << d2.count() << " " << d3.count();
+
+
   CreateDataHandlesCounter()->AddValue(datas.size());
 
   TF_VLOG(1) << "Returning " << datas.size() << " results";
